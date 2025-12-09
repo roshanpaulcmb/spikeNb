@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
+from matplotlib import colormaps
 import seaborn as sns
 import MDAnalysis as mda
 from MDAnalysis.analysis import rms, contacts, distances
@@ -18,6 +19,12 @@ from sklearn.cluster import KMeans
 from scipy.spatial.distance import cdist
 
 #### NOTES ####
+
+# Urgent!!!
+# 1. Label bands on residue correlation graph
+# 2. Check figure size to 12, 9
+# 3. Alter figure size for ace2
+# 4. creaete functions that only show residues involved in distance, residue cor, etc. 
 
 # To dos
 # Push code to github
@@ -69,10 +76,11 @@ def calcContacts(data, verbose = True):
                                     columns = ["Frame", "Contacts"])
     
     # Visualization
+    plt.figure(figsize = (12, 9))
     data["contacts"].plot(x = "Frame")
     plt.ylabel("Native Contact Frequency")
-    plt.title(f"Change in Native Contacts Frequency (Cutoff = {data['cutoff']} $\AA$)")
-    plt.savefig(f"contacts{data['cutoff']}A.png")
+    plt.title(f"Change in Native Contacts Frequency\n(Cutoff = {data['cutoff']} $\AA$)")
+    plt.savefig(f"contacts{data['cutoff']}A.png", dpi=300, bbox_inches='tight', pad_inches=0.1)
     plt.close()
     return data
 
@@ -97,26 +105,37 @@ def calcDist(data, verbose = True):
     data["distance"] = np.mean(dA, axis=0) # average of d over frames. axis = 0 is average over depth/layers (frames)
     
     # Visualization
-    fig0, ax0 = plt.subplots()
-    im0 = ax0.imshow(data["distance"], origin='upper')
-    tick_interval = 5
-    ax0.set_xticks(np.arange(len(rbdCom))[::tick_interval])
-    ax0.set_yticks(np.arange(len(nbCom))[::tick_interval])
-    # ax2.set_xticklabels(data["rbd"].residues.resids[::tick_interval])
-    # ax2.set_yticklabels(data["nb"].residues.resids[::tick_interval])\
-    plt.xlabel('RBD')
-    plt.ylabel('NB')
-    plt.title('Average Distance Between Nb and Rbd Residues')
+    # --- Inferno colormap ---
+    inferno_cmap = colormaps["inferno"]
+
+    fig0, ax0 = plt.subplots(figsize=(12,9))
+    im0 = ax0.imshow(
+        data["distance"],
+        origin='upper',
+        cmap=inferno_cmap
+    )
+
+    tick_interval = 10
+    ax0.set_xticks(np.arange(0, len(rbdCom), tick_interval), minor=True)
+    ax0.set_yticks(np.arange(0, len(nbCom), tick_interval), minor=True)
+
+    plt.xlabel('RBD Residues')
+    plt.ylabel('NB Residues')
+    plt.title('Average Pairwise Distance Between NB and RBD Residues Over Trajectory')
+
     plt.xticks(rotation=90)
+
+    # Colorbar
     cbar0 = fig0.colorbar(im0)
-    cbar0.ax.set_ylabel("Distance ($\AA$)")
-    plt.savefig("distanceHeatmap.png")
+    cbar0.ax.set_ylabel("Distance ($\\AA$)")
+
+    plt.savefig("distanceHeatmap.png", dpi=300, bbox_inches='tight', pad_inches=0.1)
     plt.close()
 
     # Masking
     
     # Build a colormap that maps 0 → cutoff normally
-    base_cmap = plt.cm.viridis
+    base_cmap = plt.cm.inferno
     new_cmap = ListedColormap(base_cmap(np.linspace(0, 1, 256)))
 
     # Set the "over" color for values > cutoff
@@ -135,9 +154,9 @@ def calcDist(data, verbose = True):
     im1.set_clim(0, data["cutoff"])   # ensures consistent normalization
 
     # --- MIDDLE LAYER: CDR spans ---
-    ax1.axhspan(31, 35, color='lightblue', alpha=0.7, zorder=1, label='CDR1')
-    ax1.axhspan(50, 66, color='lightsteelblue', alpha=0.7, zorder=1, label='CDR2')
-    ax1.axhspan(97,108, color='slategray', alpha=0.3, zorder=1, label='CDR3')
+    ax1.axhspan(31, 35, color='palevioletred', alpha=0.3, zorder=1, label='CDR1')
+    ax1.axhspan(50, 66, color='mediumvioletred', alpha=0.3, zorder=1, label='CDR2')
+    ax1.axhspan(97,108, color='blueviolet', alpha=0.3, zorder=1, label='CDR3')
 
     # --- TOP LAYER: highlight points ≤ cutoff ---
     highlight_mask = np.ma.masked_where(data["distance"] > data["cutoff"],
@@ -145,7 +164,7 @@ def calcDist(data, verbose = True):
 
     im2 = ax1.imshow(
         highlight_mask,
-        cmap="viridis",                    # highlight color map
+        cmap="inferno",                    # highlight color map
         vmin=0,
         vmax=data["cutoff"],
         interpolation='none',
@@ -157,21 +176,122 @@ def calcDist(data, verbose = True):
     cbar1 = fig1.colorbar(im1, extend="max")
     cbar1.ax.set_ylabel('Distance ($\\AA$)')
 
-    tick_interval = 5
-    ax1.set_xticks(np.arange(len(rbdCom))[::tick_interval])
-    ax1.set_yticks(np.arange(len(nbCom))[::tick_interval])
+    tick_interval = 10
+    ax1.set_xticks(np.arange(0, len(rbdCom), tick_interval), minor=True)
+    ax1.set_yticks(np.arange(0, len(nbCom), tick_interval), minor=True)
     plt.xlabel('RBD')
     plt.ylabel('NB')
-    plt.title(
-        f"Filtered Average Distance Between Nb and Rbd Residues\n"
-        f"(Cutoff = {data['cutoff']}$\\AA$)"
-    )
+    plt.title(f"Filtered Average Distance Between NB and RBD Residues\n(Cutoff = {data['cutoff']}$\\AA$)")
     plt.xticks(rotation=90)
 
     plt.legend(loc='upper left')
     plt.tight_layout()
-    plt.savefig(f"filteredAvgD{data['cutoff']}.png")
+    plt.savefig(f"filteredAvgD{data['cutoff']}.png", dpi=300, bbox_inches='tight', pad_inches=0.1)
     plt.close()
+
+    # --- NEW PLOT: only residues below cutoff (categorical axes) ---
+    below_cutoff_mask = data["distance"] <= data["cutoff"]
+
+    nb_residues_under = np.where(below_cutoff_mask.any(axis=1))[0]
+    rbd_residues_under = np.where(below_cutoff_mask.any(axis=0))[0]
+
+    if len(nb_residues_under) > 0 and len(rbd_residues_under) > 0:
+
+        filtered_distance = data["distance"][np.ix_(nb_residues_under, rbd_residues_under)]
+
+        # --- Mask for highlight layer ---
+        highlight_mask = np.ma.masked_where(filtered_distance > data["cutoff"], filtered_distance)
+
+        # --- Base colormap with neutral background ---
+        base_cmap = plt.cm.inferno
+        new_cmap = ListedColormap(base_cmap(np.linspace(0, 1, 256)))
+        new_cmap.set_over("lightgray")
+
+        fig2, ax2 = plt.subplots(figsize=(10, 8))
+
+        # --- Bottom layer ---
+        im0 = ax2.imshow(
+            filtered_distance,
+            origin='upper',
+            cmap=new_cmap,
+            vmax=data["cutoff"],
+            interpolation='none',
+            zorder=0
+        )
+        im0.set_clim(0, data["cutoff"])
+
+        # --- ADD: thin grid lines at residue boundaries (behind everything) ---
+        N_rbd = len(rbd_residues_under)
+        N_nb  = len(nb_residues_under)
+        ax2.set_xticks(np.arange(N_rbd) - 0.5, minor=True)
+        ax2.set_yticks(np.arange(N_nb) - 0.5, minor=True)
+        ax2.grid(which='minor', linestyle='-', linewidth=0.2, color='black', alpha=0.25)
+        ax2.tick_params(which='minor', bottom=False, left=False)
+
+        # --- CDR spans ---
+        for start, end, color, label in [
+            (31, 35, 'palevioletred', 'CDR1'),
+            (50, 66, 'mediumvioletred', 'CDR2'),
+            (97,108, 'blueviolet', 'CDR3')
+        ]:
+            overlap = np.intersect1d(np.arange(start, end+1), nb_residues_under)
+            if len(overlap) > 0:
+                y0 = np.where(nb_residues_under == overlap[0])[0][0]
+                y1 = np.where(nb_residues_under == overlap[-1])[0][0]
+                ax2.axhspan(y0, y1, color=color, alpha=0.3, label=label, zorder=1)
+
+        # --- Highlight layer ---
+        im1 = ax2.imshow(
+            highlight_mask,
+            origin='upper',
+            cmap="inferno",
+            vmin=0,
+            vmax=data["cutoff"],
+            interpolation='none',
+            alpha=0.9,
+            zorder=2
+        )
+
+        # --- Colorbar ---
+        cbar = fig2.colorbar(im0, extend="max")
+        cbar.ax.set_ylabel('Distance ($\\AA$)')
+
+        # --- Tick spacing logic ---
+        # N_rbd and N_nb already computed above
+
+        # Show all ticks but shrink font depending on count
+        xtick_font = 8 if N_rbd <= 40 else 6 if N_rbd <= 80 else 5
+        ytick_font = 8 if N_nb  <= 40 else 6 if N_nb  <= 80 else 5
+
+        ax2.set_xticks(np.arange(N_rbd))
+        ax2.set_xticklabels([str(r) for r in rbd_residues_under],
+                            rotation=90,
+                            fontsize=xtick_font)
+
+        ax2.set_yticks(np.arange(N_nb))
+        ax2.set_yticklabels([str(r) for r in nb_residues_under],
+                            fontsize=ytick_font)
+
+        # Labels + Title
+        plt.xlabel('RBD Residues')
+        plt.ylabel('NB Residues')
+        plt.title(f"Filtered Average Pairwise Distance Between Nb and Rbd Residues Over Trajectory\n (Cutoff = {data['cutoff']}$\\AA$)",
+                pad=20)  # prevents title clipping
+
+        # Make more room for rotated x-tick labels
+        plt.tight_layout()
+        plt.subplots_adjust(bottom=0.25, left=0.20, top=0.92)
+
+        plt.legend(loc='upper left', fontsize=8)
+
+        # --- SAVE: centered in PNG and no clipping ---
+        plt.savefig(
+            f"belowCutoffDistanceColored{data['cutoff']}.png",
+            dpi=300,
+            bbox_inches='tight',
+            pad_inches=0.1
+        )
+        plt.close()
     
     return data
 
@@ -205,7 +325,7 @@ def calcContacts2(data, verbose = True):
     highlight_mask = np.ma.masked_where(contactA < 0.5, contactA)
 
     # --- Base colormap with neutral background ---
-    base_cmap = plt.cm.viridis
+    base_cmap = plt.cm.inferno
     new_cmap = ListedColormap(base_cmap(np.linspace(0, 1, 256)))
     new_cmap.set_under("lightgray")   # values < 0.5 will appear neutral
 
@@ -223,15 +343,15 @@ def calcContacts2(data, verbose = True):
     )
 
     # --- MIDDLE LAYER: CDR spans ---
-    ax0.axhspan(31, 35, color='lightblue', alpha=0.7, zorder=1, label='CDR1')
-    ax0.axhspan(50, 66, color='lightsteelblue', alpha=0.7, zorder=1, label='CDR2')
-    ax0.axhspan(97,108, color='slategray', alpha=0.3, zorder=1, label='CDR3')
+    ax0.axhspan(31, 35, color='palevioletred', alpha=0.3, zorder=1, label='CDR1')
+    ax0.axhspan(50, 66, color='mediumvioletred', alpha=0.3, zorder=1, label='CDR2')
+    ax0.axhspan(97,108, color='blueviolet', alpha=0.3, zorder=1, label='CDR3')
 
     # --- TOP LAYER: highlight contacts ≥ 0.5 ---
     im1 = ax0.imshow(
         highlight_mask,
         origin='upper',
-        cmap="viridis",
+        cmap="inferno",
         vmin=0.5,
         vmax=1.0,
         interpolation='none',
@@ -244,17 +364,17 @@ def calcContacts2(data, verbose = True):
     cbar0.ax.set_ylabel('Frequency')
 
     # --- Axes styling ---
-    tick_interval = 5
-    ax0.set_xticks(np.arange(len(rbdCom))[::tick_interval])
-    ax0.set_yticks(np.arange(len(nbCom))[::tick_interval])
+    tick_interval = 10
+    ax0.set_xticks(np.arange(len(rbdCom), minor=True)[::tick_interval])
+    ax0.set_yticks(np.arange(len(nbCom), minor=True)[::tick_interval])
 
-    plt.xlabel('RBD')
-    plt.ylabel('NB')
+    plt.xlabel('RBD Residues')
+    plt.ylabel('NB Residues')
     plt.title(f"Contact Frequency Between Nb and Rbd Residues\n(Cutoff = {data['cutoff']}$\\AA$)")
     plt.xticks(rotation=90)
     plt.legend(loc='upper left')
 
-    plt.savefig(f"pairwiseContactFreq{data['cutoff']}.png")
+    plt.savefig(f"pairwiseContactFreq{data['cutoff']}.png", dpi=300, bbox_inches='tight', pad_inches=0.1)
     plt.close()
 
     return data
@@ -294,12 +414,12 @@ def calcSfe(data, bins = 200, sigma = 2, temperature = 310):
     data["deltaFsmooth"] = gaussian_filter(deltaF, sigma = sigma)
     
     # Visualization
-    plt.contourf(data["deltaFsmooth"].T, cmap='viridis')
+    plt.contourf(data["deltaFsmooth"].T, cmap='inferno')
     plt.xlabel("PC1")
     plt.ylabel("PC2")
     plt.colorbar(label="ΔF (kcal/mol)")
     plt.title("Surface Free Energy Plot")
-    plt.savefig("sfePCA.png")
+    plt.savefig("sfePCA.png", dpi=300, bbox_inches='tight', pad_inches=0.1)
     plt.close()
     return data
 
@@ -365,18 +485,133 @@ def calcResCor(data):
     data["bindingScore"]    = np.sum(cutoffM)
     
     # Visualization
-    im = plt.imshow(cutoffM, cmap="coolwarm", vmin=-1, vmax=1, origin='upper')
-    tick_interval = 5
-    plt.xticks(np.arange(0, rbdN, tick_interval))
-    plt.xticks(rotation=90)
-    plt.yticks(np.arange(0, nbN, tick_interval))
-    cbar = plt.colorbar(im)
+    # --- Adaptive label sizing ---
+    N_rbd = rbdN
+    N_nb  = nbN
+
+    xtick_font = 8 if N_rbd <= 40 else 6 if N_rbd <= 80 else 5
+    ytick_font = 8 if N_nb  <= 40 else 6 if N_nb  <= 80 else 5
+
+    fig_w = 10 if N_rbd <= 40 else 12 if N_rbd <= 80 else 14
+    fig_h = 8 if N_nb  <= 40 else 10 if N_nb  <= 80 else 12
+
+    fig0, ax0 = plt.subplots(figsize=(fig_w, fig_h))
+
+    # --- Create masked array for heatmap points ---
+    masked_cutoffM = np.ma.masked_where(cutoffM == 0, cutoffM)  # only show points with data
+
+    # --- Neutral background (light gray) ---
+    neutral_bg = np.ones_like(cutoffM)
+    cmap_bg = ListedColormap(['lightgray'])
+    ax0.imshow(neutral_bg, origin='upper', cmap=cmap_bg, interpolation='none', zorder=0)
+
+    # --- CDR shading bands (above background, below heatmap points) ---
+    for start, end, color, label in [
+        (31, 35, 'palevioletred', 'CDR1'),
+        (50, 66, 'mediumvioletred', 'CDR2'),
+        (97,108,'blueviolet', 'CDR3')
+    ]:
+        ax0.axhspan(start, end, color=color, alpha=0.3, zorder=1, label=label)
+
+    # --- Main heatmap points (above bands) ---
+    im = ax0.imshow(masked_cutoffM, cmap="coolwarm", vmin=-1, vmax=1,
+                    origin='upper', interpolation='none', zorder=2)
+
+    # --- Thin gridlines behind everything ---
+    ax0.set_xticks(np.arange(N_rbd) - 0.5, minor=True)
+    ax0.set_yticks(np.arange(N_nb) - 0.5, minor=True)
+    ax0.grid(which='minor', linestyle='-', linewidth=0.2, color='black', alpha=0.25)
+    ax0.tick_params(which='minor', bottom=False, left=False)
+
+    # --- Residue labels ---
+    tick_interval = 10
+    ax0.set_xticks(np.arange(0, N_rbd, tick_interval))
+    ax0.set_yticks(np.arange(0, N_nb, tick_interval))
+    ax0.set_xticklabels([str(i) for i in range(0, N_rbd, tick_interval)],
+                        rotation=90, fontsize=xtick_font)
+    ax0.set_yticklabels([str(i) for i in range(0, N_nb, tick_interval)],
+                        fontsize=ytick_font)
+
+    # --- Colorbar ---
+    cbar = plt.colorbar(im, ax=ax0)
     cbar.set_label("Correlation")
-    plt.xlabel("RBD")
-    plt.ylabel("NB")
-    plt.title("Close-Contact Inter-Protein Covariance Matrix")
-    plt.savefig("residueCorrelation.png")
+
+    # --- Labels + Title ---
+    ax0.set_xlabel("RBD Residues")
+    ax0.set_ylabel("NB Residues")
+    ax0.set_title("Close-Contact Inter-Protein Covariance Matrix", pad=20)
+
+    # --- Legend ---
+    ax0.legend(loc='upper left', fontsize=8)
+
+    # --- Save PNG centered ---
+    plt.tight_layout()
+    plt.subplots_adjust(bottom=0.20, left=0.20, top=0.92)
+    plt.savefig("residueCorrelation.png", dpi=300, bbox_inches='tight', pad_inches=0.1)
     plt.close()
+
+    # FILTERED GRAPH
+    # --- Adaptive label sizing ---
+    N_rbd = rbdN
+    N_nb  = nbN
+
+    xtick_font = 8 if N_rbd <= 40 else 6 if N_rbd <= 80 else 5
+    ytick_font = 8 if N_nb  <= 40 else 6 if N_nb  <= 80 else 5
+
+    fig_w = 10 if N_rbd <= 40 else 12 if N_rbd <= 80 else 14
+    fig_h = 8 if N_nb  <= 40 else 10 if N_nb  <= 80 else 12
+
+    fig1, ax1 = plt.subplots(figsize=(fig_w, fig_h))
+
+    # --- Create masked array for heatmap points ---
+    masked_cutoffM = np.ma.masked_where(cutoffM == 0, cutoffM)  # only show points with data
+    neutral_bg = np.ma.masked_where(cutoffM != 0, cutoffM)      # neutral background for empty spots
+
+    # --- Neutral background (light gray) ---
+    cmap_bg = ListedColormap(['lightgray'])
+    ax1.imshow(neutral_bg, origin='upper', cmap=cmap_bg, interpolation='none', zorder=0)
+
+    # --- CDR shading bands (above background, below points) ---
+    ax1.axhspan(31, 35, color='palevioletred', alpha=0.3, zorder=1, label='CDR1')
+    ax1.axhspan(50, 66, color='mediumvioletred', alpha=0.3, zorder=1, label='CDR2')
+    ax1.axhspan(97,108, color='blueviolet', alpha=0.3, zorder=1, label='CDR3')
+    
+    # --- Main heatmap points ---
+    im = ax1.imshow(masked_cutoffM, cmap="coolwarm", vmin=-1, vmax=1,
+                    origin='upper', interpolation='none', zorder=2)
+
+    # --- Thin gridlines behind everything ---
+    ax1.set_xticks(np.arange(N_rbd) - 0.5, minor=True)
+    ax1.set_yticks(np.arange(N_nb) - 0.5, minor=True)
+    ax1.grid(which='minor', linestyle='-', linewidth=0.2, color='black', alpha=0.25)
+    ax1.tick_params(which='minor', bottom=False, left=False)
+
+    # --- Residue labels ---
+    ax1.set_xticks(np.arange(N_rbd))
+    ax1.set_yticks(np.arange(N_nb))
+    ax1.set_xticklabels([str(i) for i in range(N_rbd)], rotation=90, fontsize=xtick_font)
+    ax1.set_yticklabels([str(i) for i in range(N_nb)], fontsize=ytick_font)
+
+    # --- Colorbar ---
+    cbar = plt.colorbar(im, ax=ax1)
+    cbar.set_label("Correlation")
+
+    # --- Labels + Title ---
+    ax1.set_xlabel("RBD Residues")
+    ax1.set_ylabel("NB Residues")
+    ax1.set_title("Filtered Close-Contact Inter-Protein Covariance Matrix", pad=20)
+
+    # --- Layout adjustments ---
+    plt.tight_layout()
+    plt.subplots_adjust(bottom=0.20, left=0.20, top=0.92)
+
+    # --- Legend ---
+    plt.legend(loc='upper left', fontsize=8)
+
+    # --- Save PNG centered ---
+    plt.savefig("residueCorrelationFiltered.png", dpi=300, bbox_inches='tight', pad_inches=0.1)
+    plt.close()
+
     return data
 
 def runUmap(data, n_neighbors=90, min_dist=0.6, n_components=3):
@@ -400,12 +635,12 @@ def runUmap(data, n_neighbors=90, min_dist=0.6, n_components=3):
     
     # Graphing
     plt.figure(figsize=(8,6))
-    plt.scatter(emb[:,0], emb[:,1], c=np.arange(len(emb)), cmap="viridis", s=3)
+    plt.scatter(emb[:,0], emb[:,1], c=np.arange(len(emb)), cmap="inferno", s=3)
     plt.xlabel("UMAP1")
     plt.ylabel("UMAP2")
     plt.colorbar(label="Frame")
     plt.title("UMAP of PCA Projection")
-    plt.savefig(f"umapN{n_neighbors}D{min_dist}.png")
+    plt.savefig(f"umapN{n_neighbors}D{min_dist}.png", dpi=300, bbox_inches='tight', pad_inches=0.1)
     plt.close()
     
     return data
@@ -454,26 +689,40 @@ def clusterUmap(data, min_cluster_size=500):
     plt.ylabel("UMAP2")
     plt.title("Clustered UMAP")
     plt.legend(markerscale=3, fontsize=10)
-    plt.savefig("umapClustered.png")
+    plt.savefig("umapClustered.png", dpi=300, bbox_inches='tight', pad_inches=0.1)
     plt.close()
 
     return data
 
-def calcRmsd(data, ref_frame = 0, verbose = True):
-    r = rms.RMSD(data["nb"],
+
+def calcRmsd(data, verbose = True):
+    rFirst = rms.RMSD(data["nb"],
                  data["nb"],
                  select = "name CA",
-                 ref_frame = ref_frame).run(verbose = verbose)
+                 ref_frame = 0).run(verbose = verbose)
+    rFirstM = rFirst.results.rmsd.T
     
-    rM = r.results.rmsd.T
+    rLast = rms.RMSD(data["nb"],
+                 data["nb"],
+                 select = "name CA",
+                 ref_frame = -1).run(verbose = verbose)
+    rLastM = rLast.results.rmsd.T
     
     # Visualization
-    plt.plot(rM[1], rM[2])
-    plt.xlabel('Frame')
-    plt.ylabel('RMSD ($\AA$)')
-    plt.title(f"RMSD (Reference Frame = {ref_frame})")
-    plt.savefig(f"rmsd{ref_frame}.png")
+    fig, ax = plt.subplots(figsize=(8,6))
+
+    inferno_cmap = colormaps["inferno"]
+
+    ax.plot(rFirstM[1], rFirstM[2], color=inferno_cmap(0.3), label="RMSD vs First Frame")
+    ax.plot(rLastM[1],  rLastM[2],  color=inferno_cmap(0.7), label="RMSD vs Last Frame")
+
+    ax.set_xlabel("Frame")
+    ax.set_ylabel("RMSD ($\AA$)")
+    ax.set_title("RMSD Over Trajectory")
+    ax.legend()
+    plt.savefig("rmsd.png", dpi=300, bbox_inches='tight', pad_inches=0.1)
     plt.close()
+    
     return data
 
 
@@ -489,14 +738,13 @@ def runAll(pdb = "system.pdb",
     
     data = makeU(files, data)
     data = calcDist(data)
-    data = calcContacts2(data)
     data = calcContacts(data)
-    data = calcResCor(data)
+    # data = calcContacts2(data)
     
+    data = calcResCor(data)
     data = runPca(data)
-    data = calcRmsd(data, ref_frame = 0)
-    data = calcRmsd(data, ref_frame = -1)
     data = calcSfe(data)
+    data = calcRmsd(data)
     data = runUmap(data)
     data = clusterUmap(data) 
     
@@ -510,7 +758,7 @@ def runAll(pdb = "system.pdb",
 if __name__ == "__main__":
     # For running once
     # cwDir = os.getcwd()
-    # filesDir = "/nbD1Run24Nov25"
+    # filesDir = "/nbD7Run24Nov25"
     # os.chdir(cwDir + filesDir)
     runAll()
     
